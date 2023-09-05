@@ -103,10 +103,18 @@ final class HomeIdpDiscoverer {
             config);
         */
         // Overidden lookup mechanism to lookup via organization domain
-        OrganizationProvider orgs = context.getSession().getProvider(OrganizationProvider.class);
+        /* OrganizationProvider orgs = context.getSession().getProvider(OrganizationProvider.class);
         List<IdentityProviderModel> enabledIdpsWithMatchingDomain =
             orgs.getOrganizationsStreamForDomain(
                     context.getRealm(), domain.toString(), config.requireVerifiedDomain())
+                .flatMap(o -> o.getIdentityProvidersStream())
+                .filter(IdentityProviderModel::isEnabled)
+                .collect(Collectors.toList()); */
+
+        OrganizationProvider orgs = context.getSession().getProvider(OrganizationProvider.class);
+        List<IdentityProviderModel> enabledIdpsWithMatchingDomain =
+            orgs.getUserOrganizationsStream(
+                    context.getRealm(), user)
                 .flatMap(o -> o.getIdentityProvidersStream())
                 .filter(IdentityProviderModel::isEnabled)
                 .collect(Collectors.toList());
