@@ -374,12 +374,10 @@ public class JpaOrganizationProvider implements OrganizationProvider {
         Join<ExtOrganizationEntity, OrganizationAttributeEntity> attributesJoin =
             root.join("attributes", JoinType.LEFT);
 
-<<<<<<< HEAD
         attributePredicates.add(
             builder.and(
                 builder.equal(attributesJoin.get("name"), key),
                 builder.equal(attributesJoin.get("value"), value)));
->>>>>>> 5356b32c (match upstream)
       }
     }
 
