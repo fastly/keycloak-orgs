@@ -186,6 +186,11 @@ final class HomeIdpDiscoverer {
                         String corp = o.getFirstAttribute("corp_id");
                         boolean hasCorpID = corp != null && !corp.isEmpty();
                         return hasCorpID;
+                    } else if (clientID.contains("zendesk")) {
+                        String corp = o.getFirstAttribute("corp_id");
+                        if (corp != null && !corp.isEmpty()) {
+                            return true;
+                        }
                     }
                     String cid = o.getFirstAttribute("customer_id");
                     boolean hasCID = cid != null && !cid.isEmpty();
