@@ -27,6 +27,8 @@ import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.From;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
+import lombok.extern.jbosslog.JBossLog;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +36,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import org.jboss.logging.Logger;
 import org.keycloak.common.util.MultivaluedHashMap;
 import org.keycloak.models.IdentityProviderModel;
 import org.keycloak.models.KeycloakSession;
@@ -52,6 +56,7 @@ public class OrganizationAdapter implements OrganizationModel, JpaModel<ExtOrgan
   protected final RealmModel realm;
 
   private static final char ESCAPE_BACKSLASH = '\\';
+  private static final org.jboss.logging.Logger log = Logger.getLogger(OrganizationAdapter.class);
 
   public OrganizationAdapter(
       KeycloakSession session, RealmModel realm, EntityManager em, ExtOrganizationEntity org) {
@@ -276,6 +281,8 @@ public class OrganizationAdapter implements OrganizationModel, JpaModel<ExtOrgan
     OrganizationMemberEntity m = new OrganizationMemberEntity();
     m.setId(KeycloakModelUtils.generateId());
     UserEntity u = entityFromModel(user);
+    log.info("user granting membership to: " + u.toString());
+    log.info("user id granting membership to " + u.getId());
     m.setUser(u);
     m.setOrganization(org);
     em.persist(m);
