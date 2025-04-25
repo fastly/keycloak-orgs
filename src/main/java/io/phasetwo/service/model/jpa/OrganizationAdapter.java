@@ -293,6 +293,7 @@ public class OrganizationAdapter implements OrganizationModel, JpaModel<ExtOrgan
       return ((UserAdapter) user).getEntity();
     } else {
       log.info("looking in em");
+      log.info("looking for id" + user.getId());
       return em.find(UserEntity.class, user.getId());
     }
   }
