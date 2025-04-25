@@ -281,8 +281,6 @@ public class OrganizationAdapter implements OrganizationModel, JpaModel<ExtOrgan
     OrganizationMemberEntity m = new OrganizationMemberEntity();
     m.setId(KeycloakModelUtils.generateId());
     UserEntity u = entityFromModel(user);
-    log.info("user granting membership to: " + u.toString());
-    log.info("user id granting membership to " + u.getId());
     m.setUser(u);
     m.setOrganization(org);
     em.persist(m);
@@ -291,8 +289,10 @@ public class OrganizationAdapter implements OrganizationModel, JpaModel<ExtOrgan
 
   private UserEntity entityFromModel(UserModel user) {
     if (user instanceof UserAdapter) {
+      log.info("looking in user adapter");
       return ((UserAdapter) user).getEntity();
     } else {
+      log.info("looking in em");
       return em.find(UserEntity.class, user.getId());
     }
   }
