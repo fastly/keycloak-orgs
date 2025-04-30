@@ -22,12 +22,6 @@ import io.phasetwo.service.model.jpa.entity.UserOrganizationRoleMappingEntity;
 import io.phasetwo.service.util.IdentityProviders;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
-<<<<<<< HEAD
-import jakarta.persistence.criteria.CriteriaBuilder;
-import jakarta.persistence.criteria.CriteriaQuery;
-import jakarta.persistence.criteria.From;
-import jakarta.persistence.criteria.Predicate;
-import jakarta.persistence.criteria.Root;
 import lombok.extern.jbosslog.JBossLog;
 =======
 import jakarta.persistence.criteria.*;
@@ -287,7 +281,7 @@ public class OrganizationAdapter implements OrganizationModel, JpaModel<ExtOrgan
 
   @Override
   public boolean hasMembership(UserModel user) {
-    return org.getMembers().stream().anyMatch(m -> m.getUser() != null && m.getUserId().equals(user.getId()));
+    return org.getMembers().stream().anyMatch(m -> m.getUserId().equals(user.getId()));
   }
 
   @Override
