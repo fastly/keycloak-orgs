@@ -153,7 +153,8 @@ final class HomeIdpDiscoverer {
                     return 1;
                 })
                 .sorted((o1, o2) -> {
-                    if(o1.getFirstAttribute("customer_id") == userDefaultCID) return -1;
+                    String cid = o1.getFirstAttribute("customer_id");
+                    if(cid != null && cid.equals(userDefaultCID)) return -1;
                     else return 1;
                 })
                 .sorted((o1, o2) -> {
@@ -163,7 +164,7 @@ final class HomeIdpDiscoverer {
                     String customerID = o1.getFirstAttribute("customer_id");
                     if (accountHint != null && !accountHint.isEmpty() &&
                         customerID != null && !customerID.isEmpty() &&
-                        accountHint == customerID) {
+                        accountHint.equals(customerID)) {
                         return -1;
                     }
                     return 1;
