@@ -1,0 +1,14 @@
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  annotations:
+    github.com/project-slug: fastly/keycloak-orgs
+  description: Single realm, multi-tenancy for SaaS apps
+  name: keycloak-orgs
+  title: fastly/keycloak-orgs
+spec:
+  lifecycle: source
+  owner: group:ciam-customer-identity-access-management
+  type: repository
