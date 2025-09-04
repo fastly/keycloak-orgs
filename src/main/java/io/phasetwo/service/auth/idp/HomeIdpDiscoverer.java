@@ -153,7 +153,7 @@ final class HomeIdpDiscoverer {
                     return 1;
                 })
                 .sorted((o1, o2) -> {
-                    if(o1.getFirstAttribute("customer_id").equals(userDefaultCID)) return -1;
+                    if(o1.getFirstAttribute("customer_id") != null && o1.getFirstAttribute("customer_id").equals(userDefaultCID)) return -1;
                     else return 1;
                 })
                 .sorted((o1, o2) -> {
