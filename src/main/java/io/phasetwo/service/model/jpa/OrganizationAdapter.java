@@ -245,6 +245,7 @@ public class OrganizationAdapter implements OrganizationModel, JpaModel<ExtOrgan
         .filter(Objects::nonNull)
         .map(OrganizationMemberEntity::getUserId)
         .map(userId -> session.users().getUserById(realm, userId))
+        .filter(Objects::nonNull)
         .filter(u -> u.getServiceAccountClientLink() == null);
   }
 
