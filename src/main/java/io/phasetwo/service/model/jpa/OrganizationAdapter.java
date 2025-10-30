@@ -253,7 +253,11 @@ public class OrganizationAdapter implements OrganizationModel, JpaModel<ExtOrgan
     return closing(paginateQuery(query, firstResult, maxResults).getResultStream())
         .filter(Objects::nonNull)
         .map(OrganizationMemberEntity::getUserId)
+<<<<<<< HEAD
         .map(this::getMemberUserOrWarn)
+=======
+        .map(userId -> session.users().getUserById(realm, userId))
+>>>>>>> 0923a057 (Backport null user fix from p2-inc/keycloak-orgs#387.)
         .filter(Objects::nonNull)
         .filter(u -> u.getServiceAccountClientLink() == null);
   }
