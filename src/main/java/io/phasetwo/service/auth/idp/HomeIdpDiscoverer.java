@@ -175,7 +175,7 @@ final class HomeIdpDiscoverer {
                     String organizationID = o1.getFirstAttribute("organization_id");
                     if (accountHint != null && !accountHint.isEmpty() &&
                         organizationID != null && !organizationID.isEmpty() &&
-                        accountHint == customerID) {
+                        accountHint == organizationID) {
                         return -1;
                     }
                     return 1;
