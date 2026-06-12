@@ -149,6 +149,11 @@ final class HomeIdpDiscoverer {
                         if(customer_id != null && !customer_id.isEmpty()) {
                             return -1;
                         }
+
+                        String organizationID = o1.getFirstAttribute("organization_id");
+                        if(organizationID != null && !organizationID.isEmpty()) {
+                            return -1;
+                        }
                     }
                     return 1;
                 })
@@ -164,6 +169,13 @@ final class HomeIdpDiscoverer {
                     if (accountHint != null && !accountHint.isEmpty() &&
                         customerID != null && !customerID.isEmpty() &&
                         accountHint == customerID) {
+                        return -1;
+                    }
+
+                    String organizationID = o1.getFirstAttribute("organization_id");
+                    if (accountHint != null && !accountHint.isEmpty() &&
+                        organizationID != null && !organizationID.isEmpty() &&
+                        accountHint == organizationID) {
                         return -1;
                     }
                     return 1;
@@ -190,7 +202,10 @@ final class HomeIdpDiscoverer {
         String customerID = org.getFirstAttribute("customer_id");
         boolean hasCustomerID = customerID != null && !customerID.isEmpty();
 
-        return hasCustomerID;
+        String organizationID = org.getFirstAttribute("organization_id");
+        boolean hasOrganizationID = organizationID != null & !organizationID.isEmpty();
+
+        return hasCustomerID || hasOrganizationID;
     }
 
     private boolean hasForceSso(OrganizationModel org) {
