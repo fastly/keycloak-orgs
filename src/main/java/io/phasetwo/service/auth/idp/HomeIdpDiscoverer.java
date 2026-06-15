@@ -203,7 +203,7 @@ final class HomeIdpDiscoverer {
         boolean hasCustomerID = customerID != null && !customerID.isEmpty();
 
         String organizationID = org.getFirstAttribute("organization_id");
-        boolean hasOrganizationID = organizationID != null & !organizationID.isEmpty();
+        boolean hasOrganizationID = organizationID != null && !organizationID.isEmpty();
 
         return hasCustomerID || hasOrganizationID;
     }
