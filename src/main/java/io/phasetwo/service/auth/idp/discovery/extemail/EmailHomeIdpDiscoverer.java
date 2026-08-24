@@ -9,6 +9,8 @@ import io.phasetwo.service.model.OrganizationProvider;
 import org.jboss.logging.Logger;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.models.*;
+import org.keycloak.protocol.oidc.endpoints.AuthorizationEndpoint;
+import org.keycloak.sessions.AuthenticationSessionModel;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -24,6 +26,9 @@ public final class EmailHomeIdpDiscoverer implements HomeIdpDiscoverer {
     private static final String EMAIL_ATTRIBUTE = "email";
     private final Users users;
     private final IdentityProviders identityProviders;
+    private static final String ACCOUNT_HINT_QUERY_PARAM =
+            AuthorizationEndpoint.LOGIN_SESSION_NOTE_ADDITIONAL_REQ_PARAMS_PREFIX +
+            "account_hint";
 
     @PublicAPI(unstable = true)
     public EmailHomeIdpDiscoverer(Users users, IdentityProviders identityProviders) {
@@ -83,98 +88,111 @@ public final class EmailHomeIdpDiscoverer implements HomeIdpDiscoverer {
         return homeIdps;
     }
 
-    /**
-     * Get a list of idps given an email domain, user and username.
-     * 1. If the user is set in the context, initially look up the set of federated identities that match the user.
-     * 2. Look up all enabled idps for the realm. This seems unneccessary and a performance risk.
-     * 3. Get a stream of organizations with a matching email domain. Map those to idps.
-     * 3a. If multi-idps is turned on, get a subset of that list with domain matches in the config.
-     * 4. Get a subset of the list that match the user's federated identities. Return that if it's non-empty.
-     * 5. If empty, but user has linked idps, prefer linked and enabled IdPs without matching domain in favor of not linked IdPs with matching domain
-     * 6. If empty, but user doesn't have linked idps, fallback to not linked IdPs with matching domain (general case if user logs in for the first time)
-     * @param domain Email domain
-     * @param user User if set in the context
-     * @param username Username or email
-     * @returns A list of Identity Providers
-     */
+    // Note(fastly):
+    //
+    // Fastly implementation of discoverHomeIdps
+    // See above function for original implementation.
+    //
     private List<IdentityProviderModel> discoverHomeIdps(AuthenticationFlowContext context, Domain domain, UserModel user, String username) {
         final Map<String, String> linkedIdps;
 
         EmailHomeIdpDiscovererConfig config = new EmailHomeIdpDiscovererConfig(context.getAuthenticatorConfig());
         if (user == null || !config.forwardToLinkedIdp()) {
-            linkedIdps = Collections.emptyMap();
             LOG.tracef(
-                    "User '%s' is not stored locally or forwarding to linked IdP is disabled. Skipping discovery of linked IdPs.",
-                    username);
-        } else {
-            LOG.tracef(
-                    "Found local user '%s' and forwarding to linked IdP is enabled. Discovering linked IdPs.",
-                    username);
-            linkedIdps = context
-                    .getSession()
-                    .users()
-                    .getFederatedIdentitiesStream(context.getRealm(), user)
-                    .collect(
-                            Collectors.toMap(FederatedIdentityModel::getIdentityProvider, FederatedIdentityModel::getUserName));
+                "User '%s' is not stored locally or forwarding to linked IdP is disabled. Skipping discovery of linked IdPs.",
+                username);
+            return Collections.emptyList();
         }
 
-        List<IdentityProviderModel> enabledIdps = determineEnabledIdps(context);
-        // Original; lookup mechanism from https://github.com/sventorben/keycloak-home-idp-discovery
-        /*
-        List<IdentityProviderModel> enabledIdpsWithMatchingDomain = filterIdpsWithMatchingDomainFrom(enabledIdps,
-            domain,
-            config);
-        */
-        // Overidden lookup mechanism to lookup via organization domain
+        LOG.tracef(
+            "Found local user '%s' and forwarding to linked IdP is enabled. Discovering linked IdPs.",
+            username);
+
+        linkedIdps = context.getSession().users()
+                .getFederatedIdentitiesStream(context.getRealm(), user)
+                .collect(
+                    Collectors.toMap(FederatedIdentityModel::getIdentityProvider, FederatedIdentityModel::getUserName));
+
+        // Custom Fastly lookup mechanism.
+        //
+        // 1. Get all Orgs linked to the user
+        // 3. Filter orgs based on inbound client (i.e. only return SigSci orgs for sigsci-only customers etc)
+        // 4. Filter orgs to only those with force_sso
+        // 2. Filter to only enabled IdPs
+        AuthenticationSessionModel authSession =
+            context.getAuthenticationSession();
+        String clientID = authSession.getClient().getClientId();
         OrganizationProvider orgs = context.getSession().getProvider(OrganizationProvider.class);
-        boolean validateIdpEnabled = context.getRealm().getAttribute(ORG_CONFIG_VALIDATE_IDP_KEY, false);
-        List<IdentityProviderModel> enabledIdpsWithMatchingDomain =
-                orgs.getOrganizationsStreamForDomain(
-                                context.getRealm(), domain.toString(), config.requireVerifiedDomain())
-                        .flatMap(OrganizationModel::getIdentityProvidersStream)
-                        .filter(IdentityProviderModel::isEnabled)
-                        .filter(
-                                idp ->
-                                        !validateIdpEnabled
-                                                || !isIdpValidationPending(idp))
-                        .collect(Collectors.toList());
+        String userDefaultCID = Objects.toString(
+                user.getFirstAttribute("default_cid"),
+            "");
 
-        // If multi-idps is turned on, get a subset of that list with domain matches in the config.
-        if (io.phasetwo.service.util.IdentityProviders.isMultipleIdpsConfigEnabled(context.getRealm())) {
-            List<IdentityProviderModel> domainMatchingIdps =
-                    enabledIdpsWithMatchingDomain
-                            .stream()
-                            .filter(idp -> {
-                                String domains = idp.getConfig().get(ORG_DOMAIN_CONFIG_KEY);
-                                if (Strings.isNullOrEmpty(domains)) return false;
-                                return io.phasetwo.service.util.IdentityProviders.strListContains(domains, domain.toString());
-                            })
-                            .distinct()
-                            .collect(Collectors.toList());
-            // If there are _any_ matches, use that list. If there are none, use the original list.
-            if (!domainMatchingIdps.isEmpty()) {
-                enabledIdpsWithMatchingDomain = domainMatchingIdps;
-            }
-        }
+        List<IdentityProviderModel> enabledIdpsForUserOrgs =
+            orgs.getUserOrganizationsStream(
+                    context.getRealm(), user)
+                .filter(o -> {
+                    boolean isFastlyCustomer = isFastlyCustomer(o);
 
-        // Prefer linked IdP with matching domain first
-        List<IdentityProviderModel> homeIdps = getLinkedIdpsFrom(enabledIdpsWithMatchingDomain, linkedIdps);
+                    if(clientID.equals("sigsci-dashboard")) {
+                        return isCorp(o);
+                    }
 
-        if (homeIdps.isEmpty()) {
-            if (!linkedIdps.isEmpty()) {
-                // Prefer linked and enabled IdPs without matching domain in favor of not linked IdPs with matching domain
-                homeIdps = getLinkedIdpsFrom(enabledIdps, linkedIdps);
-            }
-            if (homeIdps.isEmpty()) {
-                // Fallback to not linked IdPs with matching domain (general case if user logs in for the first time)
-                homeIdps = enabledIdpsWithMatchingDomain;
-                logFoundIdps("non-linked", "matching", homeIdps, domain, username);
-            } else {
-                logFoundIdps("non-linked", "non-matching", homeIdps, domain, username);
-            }
-        } else {
-            logFoundIdps("linked", "matching", homeIdps, domain, username);
-        }
+                    if(!isFastlyCustomer && !clientID.equals("manage-fastly-com")) {
+                        return isCorp(o);
+                    }
+
+                    return isFastlyCustomer && hasForceSso(o);
+                })
+                .sorted((o1, o2) -> {
+                    if(clientID.equals("sigsci-dashboard")) {
+                        String corp_id = o1.getFirstAttribute("corp_id");
+                        if(corp_id != null && !corp_id.isEmpty()) {
+                            return -1;
+                        }
+                    }
+                    else {
+                        String customer_id = o1.getFirstAttribute("customer_id");
+                        if(customer_id != null && !customer_id.isEmpty()) {
+                            return -1;
+                        }
+
+                        String organizationID = o1.getFirstAttribute("organization_id");
+                        if(organizationID != null && !organizationID.isEmpty()) {
+                            return -1;
+                        }
+                    }
+                    return 1;
+                })
+                .sorted((o1, o2) -> {
+                    if(o1.getFirstAttribute("customer_id") != null && o1.getFirstAttribute("customer_id").equals(userDefaultCID)) return -1;
+                    else return 1;
+                })
+                .sorted((o1, o2) -> {
+                    String accountHint = authSession.getClientNote(
+                        ACCOUNT_HINT_QUERY_PARAM
+                    );
+                    String customerID = o1.getFirstAttribute("customer_id");
+                    if (accountHint != null && !accountHint.isEmpty() &&
+                        customerID != null && !customerID.isEmpty() &&
+                        accountHint == customerID) {
+                        return -1;
+                    }
+
+                    String organizationID = o1.getFirstAttribute("organization_id");
+                    if (accountHint != null && !accountHint.isEmpty() &&
+                        organizationID != null && !organizationID.isEmpty() &&
+                        accountHint == organizationID) {
+                        return -1;
+                    }
+                    return 1;
+                })
+                .flatMap(o -> o.getIdentityProvidersStream())
+                .filter(IdentityProviderModel::isEnabled)
+                .collect(Collectors.toList());
+
+        List<IdentityProviderModel> homeIdps = getLinkedIdpsFrom(enabledIdpsForUserOrgs, linkedIdps);
+
+        logFoundIdps("linked", "matching", homeIdps, domain, username);
 
         return homeIdps;
     }
@@ -233,5 +251,29 @@ public final class EmailHomeIdpDiscoverer implements HomeIdpDiscoverer {
 
     @Override
     public void close() {
+    }
+
+    private boolean isCorp(OrganizationModel org) {
+        String corp = org.getFirstAttribute("corp_id");
+        boolean hasCorpID = corp != null && !corp.isEmpty();
+
+        return hasCorpID;
+    }
+
+    private boolean isFastlyCustomer(OrganizationModel org) {
+        String customerID = org.getFirstAttribute("customer_id");
+        boolean hasCustomerID = customerID != null && !customerID.isEmpty();
+
+        String organizationID = org.getFirstAttribute("organization_id");
+        boolean hasOrganizationID = organizationID != null && !organizationID.isEmpty();
+
+        return hasCustomerID || hasOrganizationID;
+    }
+
+    private boolean hasForceSso(OrganizationModel org) {
+        String forceSSO = org.getFirstAttribute("force_sso");
+        boolean hasForceSSO = forceSSO != null && forceSSO.equals("1");
+
+        return hasForceSSO;
     }
 }
