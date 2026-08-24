@@ -91,7 +91,6 @@ public final class EmailHomeIdpDiscoverer implements HomeIdpDiscoverer {
     // Note(fastly):
     //
     // Fastly implementation of discoverHomeIdps
-    // See above function for original implementation.
     //
     private List<IdentityProviderModel> discoverHomeIdps(AuthenticationFlowContext context, Domain domain, UserModel user, String username) {
         final Map<String, String> linkedIdps;
